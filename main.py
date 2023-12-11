@@ -8,7 +8,7 @@ class MusicPlayer:
     def __init__(root, main):
         root.main = main
         root.main.title("Local Stream")
-        root.main.geometry("500x450")
+        root.main.geometry("600x550")
 
         root.current_folder = tk.StringVar()
         root.current_folder.set(
@@ -27,6 +27,7 @@ class MusicPlayer:
 
         root.paused = False
         root.repeat_mode = False
+        root.loop_mode = True
 
     def create_widgets(root):
         # Folder selection button
@@ -43,10 +44,17 @@ class MusicPlayer:
         file_label = tk.Label(root.main, textvariable=root.current_file)
 
         # Listbox to display the songs
-        root.song_listbox = tk.Listbox(
-            root.main, selectmode=tk.EXTENDED, height=10, width=60
-        )
+        root.song_listbox = tk.Listbox(root.main, selectmode=tk.ANCHOR)
         root.song_listbox.bind("<Double-Button-1>", root.play_selected_music)
+
+        # Previous button
+        root.previous_button = ttk.Button(
+            root.main,
+            # image=root.previous_icon,
+            text="Previous",
+            compound=tk.LEFT,
+            command=root.play_previous_music,
+        )
 
         # Play button
         root.play_button = ttk.Button(
@@ -84,13 +92,13 @@ class MusicPlayer:
             command=root.toggle_repeat_mode,
         )
 
-        # Previous button
-        root.previous_button = ttk.Button(
+        # Loop button
+        root.loop_button_toggle = ttk.Button(
             root.main,
-            # image=root.previous_icon,
-            text="Previous",
+            # image=root.loop_icon,
+            text="Loop - All",
             compound=tk.LEFT,
-            command=root.play_previous_music,
+            command=root.toggle_loop_mode,
         )
 
         # Next button
@@ -109,7 +117,7 @@ class MusicPlayer:
         file_label.pack(padx=5, pady=5)
 
         # List Box
-        root.song_listbox.pack(expand=True, fill=tk.BOTH, padx=5, pady=5)
+        root.song_listbox.pack(expand=True, fill=tk.BOTH, padx=100, pady=100)
 
         # Media player button
         root.previous_button.pack(side=tk.LEFT, padx=5, pady=5)
@@ -117,6 +125,7 @@ class MusicPlayer:
         root.pause_resume_button.pack(side=tk.LEFT, padx=5, pady=5)
         root.stop_button.pack(side=tk.LEFT, padx=5, pady=5)
         root.repeat_button_toggle.pack(side=tk.LEFT, padx=5, pady=5)
+        root.loop_button_toggle.pack(side=tk.LEFT, padx=5, pady=5)
         root.next_button.pack(side=tk.LEFT, padx=5, pady=5)
 
         # Initialize the mixer
@@ -166,6 +175,13 @@ class MusicPlayer:
         root.next_index = (root.current_index[0] + 1) % len(root.music_files)
         root.navigate()
 
+    def loop_music_once(root):
+        root.current_index = root.song_listbox.curselection()
+        root.next_index = (root.current_index[0] + 1) % len(root.music_files)
+        root.navigate()
+        if root.next_index == 0:
+            root.stop_music()
+
     def play_previous_music(root):
         root.current_index = root.song_listbox.curselection()
         root.next_index = (root.current_index[0] - 1) % len(root.music_files)
@@ -179,7 +195,7 @@ class MusicPlayer:
         mixer.music.play()
         root.current_file.set((f"Now Playing - {os.path.basename(root.next_song)}"))
 
-    # Play selected music in listbox
+    # Play selected music in listbox, also bind to double clicking
     def play_selected_music(root, event=None):
         root.selected_index = root.song_listbox.curselection()
         if root.selected_index:
@@ -194,9 +210,23 @@ class MusicPlayer:
             def check_repeat():
                 if root.repeat_mode and mixer.music.get_pos() == -1:
                     root.play_selected_music()
-                root.main.after(1000, check_repeat)
+                root.main.after(100, check_repeat)
 
             check_repeat()
+
+            # Loop the entire song list or only once and stop
+            def check_loop():
+                if root.loop_mode and not mixer.music.get_busy() and not root.paused:
+                    root.play_next_music()
+                if (
+                    not root.loop_mode
+                    and not mixer.music.get_busy()
+                    and not root.paused
+                ):
+                    root.loop_music_once()
+                root.main.after(100, check_loop)
+
+            check_loop()
 
     def toggle_repeat_mode(root):
         root.repeat_mode = not root.repeat_mode
@@ -204,6 +234,13 @@ class MusicPlayer:
             root.repeat_button_toggle["text"] = "Repeat - ON"
         else:
             root.repeat_button_toggle["text"] = "Repeat - OFF"
+
+    def toggle_loop_mode(root):
+        root.loop_mode = not root.loop_mode
+        if root.loop_mode:
+            root.loop_button_toggle["text"] = "Loop - All"
+        else:
+            root.loop_button_toggle["text"] = "Loop - Once"
 
     # Pause and unpause toggle
     def toggle_pause_resume_music(root):
