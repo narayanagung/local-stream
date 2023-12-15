@@ -1,157 +1,168 @@
 import os
 import tkinter as tk
+import time
+
 from tkinter import filedialog, messagebox, ttk
 from pygame import mixer
 
+from mutagen.mp3 import MP3
+from mutagen.wave import WAVE
+from mutagen.flac import FLAC
+
 
 class MusicPlayer:
-    def __init__(root, main):
-        root.main = main
-        root.main.title("Local Stream")
-        root.main.geometry("600x550")
+    def __init__(self, main):
+        self.main = main
+        self.main.title("Local Stream")
+        self.main.geometry("600x550")
 
-        root.current_folder = tk.StringVar()
-        root.current_folder.set(
+        # Label
+        self.current_folder = tk.StringVar()
+        self.current_folder.set(
             "No Folder Selected - Supported File : .mp3, .wav .flac"
         )
 
-        root.current_file = tk.StringVar()
-        root.current_file.set("No Song Currently Played")
+        self.current_file = tk.StringVar()
+        self.current_file.set("No Song Currently Played")
 
-        root.allowed_extensions = [".mp3", ".wav", ".flac"]
+        self.tips = tk.StringVar()
 
-        # root.repeat_icon = tk.PhotoImage(file="assets/repeat.png")
-        root.folder_icon = tk.PhotoImage(file="assets/folder.png")
+        # Assets
+        self.folder_icon = tk.PhotoImage(file="assets/folder.png")
 
-        root.create_widgets()
+        self.allowed_extensions = [".mp3", ".wav", ".flac"]
 
-        root.paused = False
-        root.repeat_mode = False
-        root.loop_mode = True
+        self.paused = False
+        self.repeat_mode = False
+        self.loop_mode = True
 
-    def create_widgets(root):
+        self.song_length = 0
+
+        self.create_widgets()
+
+    # FUNCTION #
+    # Widget #
+    def create_widgets(self):
         # Folder selection button
         folder_button = ttk.Button(
-            root.main,
-            image=root.folder_icon,
+            self.main,
+            image=self.folder_icon,
             text="Select Folder",
             compound=tk.LEFT,
-            command=root.select_folder,
+            command=self.select_folder,
         )
 
         # Info Label
-        folder_label = tk.Label(root.main, textvariable=root.current_folder)
-        file_label = tk.Label(root.main, textvariable=root.current_file)
+        folder_label = tk.Label(self.main, textvariable=self.current_folder)
+        file_label = tk.Label(self.main, textvariable=self.current_file)
+        tip_label = tk.Label(self.main, textvariable=self.tips)
+        self.status_bar = tk.Label(self.main, text="")
 
         # Listbox to display the songs
-        root.song_listbox = tk.Listbox(root.main, selectmode=tk.ANCHOR)
-        root.song_listbox.bind("<Double-Button-1>", root.play_selected_music)
+        self.song_listbox = tk.Listbox(self.main)
+        self.song_listbox.bind("<Double-Button-1>", self.play_selected_music)
 
         # Previous button
-        root.previous_button = ttk.Button(
-            root.main,
-            # image=root.previous_icon,
+        self.previous_button = ttk.Button(
+            self.main,
+            # image=self.previous_icon,
             text="Previous",
             compound=tk.LEFT,
-            command=root.play_previous_music,
-        )
-
-        # Play button
-        root.play_button = ttk.Button(
-            root.main,
-            # image=root.play_icon,
-            text="Play/Reset",
-            compound=tk.LEFT,
-            command=root.play_selected_music,
-        )
-
-        # Pause button
-        root.pause_resume_button = ttk.Button(
-            root.main,
-            # image=root.pause_icon,
-            text="Pause",
-            compound=tk.LEFT,
-            command=root.toggle_pause_resume_music,
-        )
-
-        # Stop button
-        root.stop_button = ttk.Button(
-            root.main,
-            # image=root.stop_icon,
-            text="Stop",
-            compound=tk.LEFT,
-            command=root.stop_music,
+            command=self.play_previous_music,
         )
 
         # Repeat button
-        root.repeat_button_toggle = ttk.Button(
-            root.main,
-            # image=root.repeat_icon,
-            text="Repeat - OFF",
+        self.repeat_button_toggle = ttk.Button(
+            self.main,
+            # image=self.repeat_icon,
+            text="Repeat - Off",
             compound=tk.LEFT,
-            command=root.toggle_repeat_mode,
+            command=self.toggle_repeat_mode,
+        )
+
+        # Pause/Resume button
+        self.pause_resume_button = ttk.Button(
+            self.main,
+            # image=self.pause_resume_icon,
+            text="Pause",
+            compound=tk.LEFT,
+            command=self.toggle_pause_resume_music,
+        )
+
+        # Stop button
+        self.stop_button = ttk.Button(
+            self.main,
+            # image=self.stop_icon,
+            text="Stop",
+            compound=tk.LEFT,
+            command=self.stop_music,
         )
 
         # Loop button
-        root.loop_button_toggle = ttk.Button(
-            root.main,
-            # image=root.loop_icon,
+        self.loop_button_toggle = ttk.Button(
+            self.main,
+            # image=self.loop_icon,
             text="Loop - All",
             compound=tk.LEFT,
-            command=root.toggle_loop_mode,
+            command=self.toggle_loop_mode,
         )
 
         # Next button
-        root.next_button = ttk.Button(
-            root.main,
-            # image=root.next_icon,
+        self.next_button = ttk.Button(
+            self.main,
+            # image=self.next_icon,
             text="Next",
             compound=tk.LEFT,
-            command=root.play_next_music,
+            command=self.play_next_music,
         )
 
         # GUI #
-        # Top area
+        # Header
         folder_button.pack(padx=5, pady=5)
         folder_label.pack(padx=5, pady=5)
         file_label.pack(padx=5, pady=5)
+        tip_label.pack(padx=5, pady=5)
 
         # List Box
-        root.song_listbox.pack(expand=True, fill=tk.BOTH, padx=100, pady=100)
+        self.song_listbox.pack(expand=True, fill=tk.BOTH, padx=50, pady=50)
+
+        # Media Info
+        self.status_bar.pack(padx=5, pady=5)
 
         # Media player button
-        root.previous_button.pack(side=tk.LEFT, padx=5, pady=5)
-        root.play_button.pack(side=tk.LEFT, padx=5, pady=5)
-        root.pause_resume_button.pack(side=tk.LEFT, padx=5, pady=5)
-        root.stop_button.pack(side=tk.LEFT, padx=5, pady=5)
-        root.repeat_button_toggle.pack(side=tk.LEFT, padx=5, pady=5)
-        root.loop_button_toggle.pack(side=tk.LEFT, padx=5, pady=5)
-        root.next_button.pack(side=tk.LEFT, padx=5, pady=5)
+        self.previous_button.pack(side=tk.LEFT, padx=5, pady=5)
+        self.repeat_button_toggle.pack(side=tk.LEFT, padx=5, pady=5)
+        self.pause_resume_button.pack(side=tk.LEFT, padx=5, pady=5)
+        self.stop_button.pack(side=tk.LEFT, padx=5, pady=5)
+        self.loop_button_toggle.pack(side=tk.LEFT, padx=5, pady=5)
+        self.next_button.pack(side=tk.LEFT, padx=5, pady=5)
 
         # Initialize the mixer
         mixer.init()
 
-    # Function #
+    # List Box & Button #
     # Folder selection using filedialog
-    def select_folder(root):
+    def select_folder(self):
         folder_selected = filedialog.askdirectory()
-        if folder_selected:
-            root.current_folder.set(f"Selected Folder - {folder_selected}")
-            root.load_music_files(folder_selected)
-            root.update_song_listbox()
+        self.current_folder.set(f"Selected Folder - {folder_selected}")
+        self.load_music_files(folder_selected)
+        self.update_song_listbox()
 
-    def load_music_files(root, folder_path):
-        root.music_files = [
+    def load_music_files(self, folder_path):
+        self.music_files = [
             os.path.join(folder_path, file)
             for file in os.listdir(folder_path)
-            if any(file.lower().endswith(ext) for ext in root.allowed_extensions)
+            if any(file.lower().endswith(ext) for ext in self.allowed_extensions)
         ]
 
         # Trow error messagebox to remind user to select an appropriate folder
-        if not root.music_files:
-            root.stop_music()
-            root.current_folder.set(
-                "No Folder Selected - Supported File : .mp3, .wav .flac"
+        if not self.music_files:
+            self.stop_music()
+            self.current_folder.set(
+                "Selected folder are not valid - Supported File : .mp3, .wav .flac"
+            )
+            self.tips.set(
+                "Tip : Make sure to have at least 1 audio file in your selected folder"
             )
             messagebox.showinfo(
                 "No Audio Files Found",
@@ -159,109 +170,156 @@ class MusicPlayer:
             )
 
     # Update the listbox content (songs list) with the new folder that user selected
-    def update_song_listbox(root):
-        root.song_listbox.delete(0, tk.END)
-        for music_file in root.music_files:
-            root.song_listbox.insert(tk.END, os.path.basename(music_file))
-        if root.music_files:
-            root.stop_music()
-            root.song_listbox.selection_clear(0, tk.END)
-            root.song_listbox.selection_set(0)
-            root.play_selected_music()
+    def update_song_listbox(self):
+        self.song_listbox.delete(0, tk.END)
+        for music_file in self.music_files:
+            self.song_listbox.insert(tk.END, os.path.basename(music_file))
+
+        self.stop_music()
+        self.song_listbox.selection_clear(0, tk.END)
+        self.song_listbox.selection_set(0)
+        self.play_selected_music()
+
+        self.tips.set("Tip : Double click with the cursor to play any song in the list")
 
     # Interupt current song to play the next/previous song
-    def play_next_music(root):
-        root.current_index = root.song_listbox.curselection()
-        root.next_index = (root.current_index[0] + 1) % len(root.music_files)
-        root.navigate()
+    def play_next_music(self):
+        self.current_index = self.song_listbox.curselection()
+        self.next_index = (self.current_index[0] + 1) % len(self.music_files)
+        self.navigate()
 
-    def loop_music_once(root):
-        root.current_index = root.song_listbox.curselection()
-        root.next_index = (root.current_index[0] + 1) % len(root.music_files)
-        root.navigate()
-        if root.next_index == 0:
-            root.stop_music()
-
-    def play_previous_music(root):
-        root.current_index = root.song_listbox.curselection()
-        root.next_index = (root.current_index[0] - 1) % len(root.music_files)
-        root.navigate()
-
-    def navigate(root):
-        root.next_song = root.music_files[root.next_index]
-        root.song_listbox.selection_clear(0, tk.END)
-        root.song_listbox.selection_set(root.next_index)
-        mixer.music.load(root.next_song)
-        mixer.music.play()
-        root.current_file.set((f"Now Playing - {os.path.basename(root.next_song)}"))
-
-    # Play selected music in listbox, also bind to double clicking
-    def play_selected_music(root, event=None):
-        root.selected_index = root.song_listbox.curselection()
-        if root.selected_index:
-            root.selected_music_file = root.music_files[root.selected_index[0]]
-            mixer.music.load(root.selected_music_file)
-            mixer.music.play()
-            root.current_file.set(
-                (f"Now Playing - {os.path.basename(root.selected_music_file)}")
+    def loop_music_once(self):
+        self.current_index = self.song_listbox.curselection()
+        self.next_index = (self.current_index[0] + 1) % len(self.music_files)
+        self.navigate()
+        if self.next_index == 0:
+            self.stop_music()
+            messagebox.showinfo(
+                "Music Stoped",
+                "You have reached the end of the playlist\n\nGood night 🤗",
             )
 
-            # Check if song end, repeat for eternity
-            def check_repeat():
-                if root.repeat_mode and mixer.music.get_pos() == -1:
-                    root.play_selected_music()
-                root.main.after(100, check_repeat)
+    def play_previous_music(self):
+        self.current_index = self.song_listbox.curselection()
+        self.next_index = (self.current_index[0] - 1) % len(self.music_files)
+        self.navigate()
 
-            check_repeat()
+    def navigate(self):
+        self.next_song = self.music_files[self.next_index]
+        self.song_listbox.selection_clear(0, tk.END)
+        self.song_listbox.selection_set(self.next_index)
+        mixer.music.load(self.next_song)
+        mixer.music.play()
 
-            # Loop the entire song list or only once and stop
-            def check_loop():
-                if root.loop_mode and not mixer.music.get_busy() and not root.paused:
-                    root.play_next_music()
-                if (
-                    not root.loop_mode
-                    and not mixer.music.get_busy()
-                    and not root.paused
-                ):
-                    root.loop_music_once()
-                root.main.after(100, check_loop)
+        self.current_file.set((f"Now Playing - {os.path.basename(self.next_song)}"))
+        self.paused = False
+        self.pause_resume_button["text"] = "Pause"
 
-            check_loop()
+    # Play selected music in listbox, also bind to double clicking
+    def play_selected_music(self, event=None):
+        self.selected_index = self.song_listbox.curselection()
+        self.selected_music_file = self.music_files[self.selected_index[0]]
+        mixer.music.load(self.selected_music_file)
+        mixer.music.play()
 
-    def toggle_repeat_mode(root):
-        root.repeat_mode = not root.repeat_mode
-        if root.repeat_mode:
-            root.repeat_button_toggle["text"] = "Repeat - ON"
-        else:
-            root.repeat_button_toggle["text"] = "Repeat - OFF"
+        self.current_file.set(
+            (f"Now Playing - {os.path.basename(self.selected_music_file)}")
+        )
+        self.paused = False
+        self.pause_resume_button["text"] = "Pause"
 
-    def toggle_loop_mode(root):
-        root.loop_mode = not root.loop_mode
-        if root.loop_mode:
-            root.loop_button_toggle["text"] = "Loop - All"
-        else:
-            root.loop_button_toggle["text"] = "Loop - Once"
+        self.play_time()
 
-    # Pause and unpause toggle
-    def toggle_pause_resume_music(root):
-        if root.paused:
+        # Check if song end, repeat for eternity
+        def check_repeat():
+            if self.repeat_mode and mixer.music.get_pos() == -1:
+                self.play_selected_music()
+            self.main.after(100, check_repeat)
+
+        check_repeat()
+
+        # Loop the entire song list or only once and stop
+        def check_loop():
+            if self.loop_mode and not mixer.music.get_busy() and not self.paused:
+                self.play_next_music()
+            if not self.loop_mode and not mixer.music.get_busy() and not self.paused:
+                self.loop_music_once()
+            self.main.after(100, check_loop)
+
+        check_loop()
+
+    def toggle_pause_resume_music(self):
+        if self.paused:
             mixer.music.unpause()
-            root.paused = False
-            root.pause_resume_button["text"] = "Pause"
+            self.paused = False
+            self.pause_resume_button["text"] = "Pause"
         else:
             mixer.music.pause()
-            root.paused = True
-            root.pause_resume_button["text"] = "Resume"
+            self.paused = True
+            self.pause_resume_button["text"] = "Resume"
 
-    def stop_music(root):
-        if mixer.music.get_busy() or mixer.music.pause:
-            mixer.music.stop()
-            root.song_listbox.selection_clear(0, tk.END)
-            root.song_listbox.selection_clear(tk.ACTIVE)
-            root.current_file.set("No Song Currently Played")
+    def toggle_repeat_mode(self):
+        self.repeat_mode = not self.repeat_mode
+        if self.repeat_mode:
+            self.repeat_button_toggle["text"] = "Repeat - On"
+        else:
+            self.repeat_button_toggle["text"] = "Repeat - Off"
+
+    def toggle_loop_mode(self):
+        self.loop_mode = not self.loop_mode
+        if self.loop_mode:
+            self.loop_button_toggle["text"] = "Loop - All"
+        else:
+            self.loop_button_toggle["text"] = "Loop - Once"
+
+    def stop_music(self):
+        # if mixer.music.get_busy() or mixer.music.pause:
+        mixer.music.stop()
+        self.song_listbox.selection_clear(0, tk.END)
+        self.song_listbox.selection_clear(tk.ACTIVE)
+
+        self.current_file.set("No Song Currently Played")
+        self.paused = False
+        self.pause_resume_button["text"] = "Pause"
+        self.status_bar.config(text="")
+
+    # Song Length & Time Scrollbar #
+    def play_time(self):
+        # Get the song length with Mutagen (.mp3, .wav, .flac)
+        def time_mp3():
+            song_mut_mp3 = MP3(self.selected_music_file)
+            self.song_length = song_mut_mp3.info.length
+
+        def time_wav():
+            song_mut_wav = WAVE(self.selected_music_file)
+            self.song_length = song_mut_wav.info.length
+
+        def time_flac():
+            song_mut_flac = FLAC(self.selected_music_file)
+            self.song_length = song_mut_flac.info.length
+
+        current_time = mixer.music.get_pos() / 1000
+        convert_current_time = time.strftime("%M:%S", time.gmtime(current_time))
+
+        self.selected_index = self.song_listbox.curselection()
+        self.selected_music_file = self.music_files[self.selected_index[0]]
+
+        if self.selected_music_file.lower().endswith(".mp3"):
+            time_mp3()
+        elif self.selected_music_file.lower().endswith(".wav"):
+            time_wav()
+        elif self.selected_music_file.lower().endswith(".flac"):
+            time_flac()
+        else:
+            pass
+
+        convert_song_length = time.strftime("%M:%S", time.gmtime(self.song_length))
+
+        self.status_bar.config(text=f"{convert_current_time} - {convert_song_length}")
+        self.status_bar.after(1000, self.play_time)
 
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    music_player = MusicPlayer(root)
-    root.mainloop()
+    self = tk.Tk()
+    music_player = MusicPlayer(self)
+    self.mainloop()
