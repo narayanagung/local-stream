@@ -31,6 +31,7 @@ class MusicPlayer:
         # Listbox frame
         self.scroll_frame = Frame(self.main, width=50)
         self.scrollbar = Scrollbar(self.scroll_frame, orient=VERTICAL, width=20)
+
         # Listbox to display the songs
         self.song_listbox = Listbox(
             self.scroll_frame,
@@ -46,8 +47,6 @@ class MusicPlayer:
         self.song_listbox.bind("<Double-Button-1>", self.play_selected_music)
         self.song_listbox.bind("<space>", self.toggle_pause_resume_music)
         self.song_listbox.bind("<Return>", self.play_selected_music)
-        self.song_listbox.bind("<Up>", self.play_previous_music)
-        self.song_listbox.bind("<Down>", self.play_next_music)
 
         self.allowed_extensions = [".mp3", ".wav", ".flac"]
 
@@ -200,17 +199,6 @@ class MusicPlayer:
         self.next_index = (self.current_index[0] + 1) % len(self.music_files)
         self.navigate()
 
-    def loop_music_once(self):
-        self.current_index = self.song_listbox.curselection()
-        self.next_index = (self.current_index[0] + 1) % len(self.music_files)
-        self.navigate()
-        if self.next_index == 0:
-            self.stop_music()
-            messagebox.showinfo(
-                "Music Stoped",
-                "You have reached the end of the playlist\n\nGood night 🤗",
-            )
-
     def play_previous_music(self, event=None):
         self.current_index = self.song_listbox.curselection()
         self.next_index = (self.current_index[0] - 1) % len(self.music_files)
@@ -226,6 +214,8 @@ class MusicPlayer:
         self.current_file.set((f"Now Playing - {os.path.basename(self.next_song)}"))
         self.paused = False
         self.pause_resume_button["text"] = "Pause"
+
+        self.play_time()
 
     # Play selected music in listbox, also bind to double clicking
     def play_selected_music(self, event=None):
@@ -262,6 +252,7 @@ class MusicPlayer:
 
         check_loop()
 
+    # Pause n resume
     def toggle_pause_resume_music(self, event=None):
         if self.paused:
             mixer.music.unpause()
@@ -272,13 +263,17 @@ class MusicPlayer:
             self.paused = True
             self.pause_resume_button["text"] = "Resume"
 
+    # Repeat one music
     def toggle_repeat_mode(self):
         self.repeat_mode = not self.repeat_mode
         if self.repeat_mode:
             self.repeat_button_toggle["text"] = "Repeat - On"
+            self.loop_button_toggle.config(state=DISABLED)
         else:
             self.repeat_button_toggle["text"] = "Repeat - Off"
+            self.loop_button_toggle.config(state=NORMAL)
 
+    # Repeat the entire folder
     def toggle_loop_mode(self):
         self.loop_mode = not self.loop_mode
         if self.loop_mode:
@@ -286,8 +281,20 @@ class MusicPlayer:
         else:
             self.loop_button_toggle["text"] = "Loop - Once"
 
+    # Repeat the entire folder once
+    def loop_music_once(self):
+        self.current_index = self.song_listbox.curselection()
+        self.next_index = (self.current_index[0] + 1) % len(self.music_files)
+        self.navigate()
+        if self.next_index == 0:
+            self.stop_music()
+            messagebox.showinfo(
+                "Music Stoped",
+                "You have reached the end of the playlist\n\nGood night 🤗",
+            )
+
     def stop_music(self):
-        # if mixer.music.get_busy() or mixer.music.pause:
+        # If mixer.music.get_busy() or mixer.music.pause:
         mixer.music.stop()
         self.song_listbox.selection_clear(0, END)
         self.song_listbox.selection_clear(ACTIVE)
