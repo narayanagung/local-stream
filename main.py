@@ -15,7 +15,7 @@ class MusicPlayer:
     def __init__(self, main):
         self.main = main
         self.main.title("Local Stream")
-        self.main.geometry("600x600")
+        self.main.geometry("600x700")
 
         # Label
         self.current_folder = StringVar()
@@ -46,15 +46,10 @@ class MusicPlayer:
         # Key bind
         self.song_listbox.bind("<Double-Button-1>", self.play_selected_music)
         self.song_listbox.bind("<space>", self.toggle_pause_resume_music)
-        self.song_listbox.bind("<Return>", self.play_selected_music)
+        # self.song_listbox.bind("<Return>", self.play_selected_music)
 
         self.allowed_extensions = [".mp3", ".wav", ".flac"]
-
-        self.paused = False
-        self.repeat_mode = False
-        self.loop_mode = True
         self.song_length = 0
-
         self.create_widgets()
 
     ## FUNCTION ##
@@ -67,31 +62,14 @@ class MusicPlayer:
             text="Select Folder",
             compound=LEFT,
             command=self.select_folder,
+            width=250,
         )
 
         # Info Label
         folder_label = Label(self.main, textvariable=self.current_folder)
         file_label = Label(self.main, textvariable=self.current_file)
         tip_label = Label(self.main, textvariable=self.tips)
-        self.status_bar = Label(self.main, text="")
-
-        # Repeat button
-        self.repeat_button_toggle = ttk.Button(
-            self.main,
-            # image=self.repeat_icon,
-            text="Repeat - Off",
-            compound=LEFT,
-            command=self.toggle_repeat_mode,
-        )
-
-        # Previous button
-        self.previous_button = ttk.Button(
-            self.main,
-            # image=self.previous_icon,
-            text="Previous",
-            compound=LEFT,
-            command=self.play_previous_music,
-        )
+        self.time_bar = Label(self.main, text="")
 
         # Pause/Resume button
         self.pause_resume_button = ttk.Button(
@@ -99,25 +77,7 @@ class MusicPlayer:
             # image=self.pause_resume_icon,
             text="Pause",
             compound=LEFT,
-            command=self.toggle_pause_resume_music,
-        )
-
-        # Next button
-        self.next_button = ttk.Button(
-            self.main,
-            # image=self.next_icon,
-            text="Next",
-            compound=LEFT,
-            command=self.play_next_music,
-        )
-
-        # Loop button
-        self.loop_button_toggle = ttk.Button(
-            self.main,
-            # image=self.loop_icon,
-            text="Loop - All",
-            compound=LEFT,
-            command=self.toggle_loop_mode,
+            command=lambda: self.toggle_pause_resume_music(paused),
         )
 
         ## GUI ##
@@ -135,14 +95,32 @@ class MusicPlayer:
         )
 
         # Media Info
-        self.status_bar.pack(padx=5, pady=5)
+        self.time_bar.pack(padx=5, pady=5)
 
-        # Media player button
-        self.repeat_button_toggle.pack(padx=5, pady=5)
-        self.previous_button.pack(padx=5, pady=5)
+        # Progress bar
+        self.progress_bar = ttk.Scale(  # Creates the progress bar
+            self.main,
+            orient=HORIZONTAL,
+            length=400,
+            from_=0,
+            to=100,
+            command=self.seek_music,  # Calls seek_music when user interacts
+        )
+
+        self.user_interacting = False  # Tracks if the user is manually seeking
+        self.progress_bar.bind("<ButtonPress-1>", self.on_progress_bar_interact)
+        self.progress_bar.bind("<ButtonRelease-1>", self.on_progress_bar_release)
+
+        self.scroll_frame.pack()
+        self.scrollbar.pack(side=RIGHT, fill=Y)
+        self.song_listbox.pack(
+            pady=15, ipadx=180, ipady=30, side=LEFT, fill=BOTH, expand=True
+        )
+
+        self.progress_bar.pack(padx=5, pady=10)  # Packs the progress bar in the GUI
+
+        # Media player button pack
         self.pause_resume_button.pack(padx=5, pady=5)
-        self.next_button.pack(padx=5, pady=5)
-        self.loop_button_toggle.pack(padx=5, pady=5)
 
         # Initialize the mixer
         mixer.init()
@@ -164,9 +142,9 @@ class MusicPlayer:
 
         # Trow error messagebox to remind user to select an appropriate folder
         if not self.music_files:
-            self.stop_music()
+            # self.stop_music()
             self.current_folder.set(
-                "Selected folder are not valid - Supported File : .mp3, .wav .flac"
+                "Selected folder are not valid - Supported File : .mp3, .wav, .flac,"
             )
             self.tips.set(
                 "Tip : Make sure to have at least 1 audio file in your selected folder"
@@ -176,13 +154,25 @@ class MusicPlayer:
                 "No audio files with allowed extensions found in the selected folder ( .mp3, .wav, .flac )\n\nTry selecting another folder!",
             )
 
+    def on_progress_bar_interact(self, event=None):
+        self.user_interacting = True  # User starts interacting, mute the audio
+        mixer.music.set_volume(0)
+
+    def on_progress_bar_release(self, event=None):
+        self.user_interacting = False  # User stops interacting, restore the audio
+        mixer.music.set_volume(1)
+
+    def seek_music(self, event=None):
+        mixer.music.load(self.selected_music_file)  # Reload the song
+        mixer.music.play(start=int(self.progress_bar.get()))
+
     # Update the listbox content (songs list) with the new folder that user selected
     def update_song_listbox(self):
         self.song_listbox.delete(0, END)
         for music_file in self.music_files:
             self.song_listbox.insert(END, os.path.basename(music_file))
 
-        self.stop_music()
+        # self.stop_music()
         self.song_listbox.selection_clear(0, END)
         self.song_listbox.selection_set(0)
         self.play_selected_music()
@@ -193,119 +183,64 @@ class MusicPlayer:
 
         self.song_listbox.focus_set()
 
-    # Interupt current song to play the next/previous song
-    def play_next_music(self, event=None):
-        self.current_index = self.song_listbox.curselection()
-        self.next_index = (self.current_index[0] + 1) % len(self.music_files)
-        self.navigate()
-
-    def play_previous_music(self, event=None):
-        self.current_index = self.song_listbox.curselection()
-        self.next_index = (self.current_index[0] - 1) % len(self.music_files)
-        self.navigate()
-
-    def navigate(self):
-        self.next_song = self.music_files[self.next_index]
-        self.song_listbox.selection_clear(0, END)
-        self.song_listbox.selection_set(self.next_index)
-        mixer.music.load(self.next_song)
-        mixer.music.play()
-
-        self.current_file.set((f"Now Playing - {os.path.basename(self.next_song)}"))
-        self.paused = False
-        self.pause_resume_button["text"] = "Pause"
-
-        self.play_time()
-
     # Play selected music in listbox, also bind to double clicking
     def play_selected_music(self, event=None):
+        global stopped
+        stopped = False
         self.selected_index = self.song_listbox.curselection()
         self.selected_music_file = self.music_files[self.selected_index[0]]
         self.song_listbox.selection_clear(0, END)
         self.song_listbox.selection_set(self.selected_index)
+
         mixer.music.load(self.selected_music_file)
         mixer.music.play()
 
         self.current_file.set(
             (f"Now Playing - {os.path.basename(self.selected_music_file)}")
         )
-        self.paused = False
-        self.pause_resume_button["text"] = "Pause"
 
+        self.progress_bar.config(value=0)
         self.play_time()
 
-        # Check if song end, repeat for eternity
-        def check_repeat():
-            if self.repeat_mode and mixer.music.get_pos() == -1:
-                self.play_selected_music()
-            self.main.after(100, check_repeat)
-
-        check_repeat()
-
-        # Loop the entire song list or only once and stop
-        def check_loop():
-            if self.loop_mode and not mixer.music.get_busy() and not self.paused:
-                self.play_next_music()
-            if not self.loop_mode and not mixer.music.get_busy() and not self.paused:
-                self.loop_music_once()
-            self.main.after(100, check_loop)
-
-        check_loop()
-
     # Pause n resume
-    def toggle_pause_resume_music(self, event=None):
-        if self.paused:
+    global paused
+    paused = False
+
+    def toggle_pause_resume_music(self, is_paused):
+        global paused
+        paused = is_paused
+
+        if paused:
             mixer.music.unpause()
-            self.paused = False
+            paused = False
             self.pause_resume_button["text"] = "Pause"
         else:
             mixer.music.pause()
-            self.paused = True
+            paused = True
             self.pause_resume_button["text"] = "Resume"
 
-    # Repeat one music
-    def toggle_repeat_mode(self):
-        self.repeat_mode = not self.repeat_mode
-        if self.repeat_mode:
-            self.repeat_button_toggle["text"] = "Repeat - On"
-            self.loop_button_toggle.config(state=DISABLED)
-        else:
-            self.repeat_button_toggle["text"] = "Repeat - Off"
-            self.loop_button_toggle.config(state=NORMAL)
-
-    # Repeat the entire folder
-    def toggle_loop_mode(self):
-        self.loop_mode = not self.loop_mode
-        if self.loop_mode:
-            self.loop_button_toggle["text"] = "Loop - All"
-        else:
-            self.loop_button_toggle["text"] = "Loop - Once"
-
-    # Repeat the entire folder once
-    def loop_music_once(self):
-        self.current_index = self.song_listbox.curselection()
-        self.next_index = (self.current_index[0] + 1) % len(self.music_files)
-        self.navigate()
-        if self.next_index == 0:
-            self.stop_music()
-            messagebox.showinfo(
-                "Music Stoped",
-                "You have reached the end of the playlist\n\nGood night 🤗",
-            )
+    global stopped
+    stopped = False
 
     def stop_music(self):
-        # If mixer.music.get_busy() or mixer.music.pause:
         mixer.music.stop()
         self.song_listbox.selection_clear(0, END)
         self.song_listbox.selection_clear(ACTIVE)
+        self.progress_bar.config(value=0)
 
         self.current_file.set("No Song Currently Played")
-        self.paused = False
+        # self.paused = False
         self.pause_resume_button["text"] = "Pause"
         self.status_bar.config(text="")
 
+        global stopped
+        stopped = True
+
     # Song Length & Time Control #
     def play_time(self):
+        if stopped:
+            return
+
         # Get the song length with Mutagen (.mp3, .wav, .flac)
         def time_mp3():
             song_mut_mp3 = MP3(self.selected_music_file)
@@ -319,13 +254,6 @@ class MusicPlayer:
             song_mut_flac = FLAC(self.selected_music_file)
             self.song_length = song_mut_flac.info.length
 
-        # Current song time
-        current_time = mixer.music.get_pos() / 1000
-        convert_current_time = time.strftime("%H:%M:%S", time.gmtime(current_time))
-
-        self.selected_index = self.song_listbox.curselection()
-        self.selected_music_file = self.music_files[self.selected_index[0]]
-
         # Checking the appropriate extention
         if self.selected_music_file.lower().endswith(".mp3"):
             time_mp3()
@@ -333,15 +261,44 @@ class MusicPlayer:
             time_wav()
         elif self.selected_music_file.lower().endswith(".flac"):
             time_flac()
-        else:
-            pass
+
+        # Current song position
+        current_time = mixer.music.get_pos() / 1000
+        convert_current_time = time.strftime("%H:%M:%S", time.gmtime(current_time))
+
+        self.selected_index = self.song_listbox.curselection()
+        self.selected_music_file = self.music_files[self.selected_index[0]]
 
         # Song length
         convert_song_length = time.strftime("%H:%M:%S", time.gmtime(self.song_length))
 
-        # Visualize current time and song length
-        self.status_bar.config(text=f"{convert_current_time} - {convert_song_length}")
-        self.status_bar.after(100, self.play_time)
+        # Plus 1 to match the song
+        current_time += 1
+
+        if int(self.progress_bar.get()) == int(self.song_length):
+            self.time_bar.config(text=f"{convert_song_length} - {convert_song_length}")
+        elif paused:
+            pass
+        elif int(self.progress_bar.get()) == int(current_time):
+            # Slider is not moved
+            self.progress_bar_position = int(self.song_length)
+            self.progress_bar.config(
+                to=self.progress_bar_position, value=int(current_time)
+            )
+        else:
+            # User interact with the slider
+            self.progress_bar_position = int(self.song_length)
+            self.progress_bar.config(
+                to=self.progress_bar_position, value=int(self.progress_bar.get())
+            )
+            convert_current_time = time.strftime(
+                "%H:%M:%S", time.gmtime(int(self.progress_bar.get()))
+            )
+            self.time_bar.config(text=f"{convert_current_time} - {convert_song_length}")
+            self.next_time = int(self.progress_bar.get()) + 1
+            self.progress_bar.config(value=self.next_time)
+
+            self.time_bar.after(1000, self.play_time)
 
 
 if __name__ == "__main__":
